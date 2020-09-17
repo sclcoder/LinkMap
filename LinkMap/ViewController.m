@@ -70,6 +70,8 @@
     }
     
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        
+        /// 读取link-map文件信息
         NSString *content = [NSString stringWithContentsOfURL:_linkMapFileURL encoding:NSMacOSRomanStringEncoding error:nil];
         
         if (![self checkContent:content]) {
@@ -85,10 +87,12 @@
             
         });
         
+        /// 获取所有的symbols模型
         NSDictionary *symbolMap = [self symbolMapFromContent:content];
         
         NSArray <SymbolModel *>*symbols = [symbolMap allValues];
         
+        /// 降序排列
         NSArray *sortedSymbols = [self sortSymbols:symbols];
         
         __block NSControlStateValue groupButtonState;
@@ -112,9 +116,72 @@
 }
 
 - (NSMutableDictionary *)symbolMapFromContent:(NSString *)content {
+    
     NSMutableDictionary <NSString *,SymbolModel *>*symbolMap = [NSMutableDictionary new];
-    // 符号文件列表
-    NSArray *lines = [content componentsSeparatedByString:@"\n"];
+    
+    // 符号文件列表 : 使用换行符切割成字符串数组
+    NSArray *lines = [content componentsSeparatedByString:@"\n"]; /// 用换行符切割
+    
+    /**
+     "# Path: /Users/tiny/Library/Developer/Xcode/DerivedData/CoreData-biampcxablpiutfebmedptlcrueb/Build/Products/Debug-iphonesimulator/CoreData.app/CoreData",
+     "# Arch: x86_64",
+     "# Object files:",
+     "[  0] linker synthesized",
+     "[  1] /Users/tiny/Library/Developer/Xcode/DerivedData/CoreData-biampcxablpiutfebmedptlcrueb/Build/Intermediates.noindex/CoreData.build/Debug-iphonesimulator/CoreData.build/CoreData.app-Simulated.xcent",
+     "[  2] /Users/tiny/Library/Developer/Xcode/DerivedData/CoreData-biampcxablpiutfebmedptlcrueb/Build/Intermediates.noindex/CoreData.build/Debug-iphonesimulator/CoreData.build/Objects-normal/x86_64/ViewController.o",
+     "[  3] /Users/tiny/Library/Developer/Xcode/DerivedData/CoreData-biampcxablpiutfebmedptlcrueb/Build/Intermediates.noindex/CoreData.build/Debug-iphonesimulator/CoreData.build/Objects-normal/x86_64/CoreDataStore.o",
+     "[  4] /Users/tiny/Library/Developer/Xcode/DerivedData/CoreData-biampcxablpiutfebmedptlcrueb/Build/Intermediates.noindex/CoreData.build/Debug-iphonesimulator/CoreData.build/Objects-normal/x86_64/DataManager.o",
+     "[  5] /Users/tiny/Library/Developer/Xcode/DerivedData/CoreData-biampcxablpiutfebmedptlcrueb/Build/Intermediates.noindex/CoreData.build/Debug-iphonesimulator/CoreData.build/Objects-normal/x86_64/AppDelegate.o",
+     "[  6] /Users/tiny/Library/Developer/Xcode/DerivedData/CoreData-biampcxablpiutfebmedptlcrueb/Build/Intermediates.noindex/CoreData.build/Debug-iphonesimulator/CoreData.build/Objects-normal/x86_64/main.o",
+     "[  7] /Users/tiny/Library/Developer/Xcode/DerivedData/CoreData-biampcxablpiutfebmedptlcrueb/Build/Intermediates.noindex/CoreData.build/Debug-iphonesimulator/CoreData.build/Objects-normal/x86_64/SceneDelegate.o",
+     "[  8] /Applications/Xcode11.5.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator13.5.sdk/System/Library/Frameworks//Foundation.framework/Foundation.tbd",
+     "[  9] /Applications/Xcode11.5.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator13.5.sdk/usr/lib/libobjc.tbd",
+     "[ 10] /Applications/Xcode11.5.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator13.5.sdk/usr/lib/libSystem.tbd",
+     "[ 11] /Applications/Xcode11.5.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator13.5.sdk/System/Library/Frameworks//UIKit.framework/UIKit.tbd",
+     "# Sections:",
+     "# Address\tSize    \tSegment\tSection",
+     "0x100001160\t0x00001B23\t__TEXT\t__text",
+     "0x100002C84\t0x0000007E\t__TEXT\t__stubs",
+     "0x100002D04\t0x000000E2\t__TEXT\t__stub_helper",
+     "0x100002DE6\t0x00001183\t__TEXT\t__objc_methname",
+     "0x100003F69\t0x00000091\t__TEXT\t__objc_classname",
+     "0x100003FFA\t0x00000B49\t__TEXT\t__objc_methtype",
+     "0x100004B43\t0x000002BF\t__TEXT\t__cstring",
+     "0x100004E02\t0x00000034\t__TEXT\t__ustring",
+     "0x100004E36\t0x00000174\t__TEXT\t__entitlements",
+     "0x100004FAC\t0x00000048\t__TEXT\t__unwind_info",
+     "0x100005000\t0x00000038\t__DATA_CONST\t__got",
+     "0x100005038\t0x00000030\t__DATA_CONST\t__const",
+     "0x100005068\t0x00000240\t__DATA_CONST\t__cfstring",
+     "0x1000052A8\t0x00000028\t__DATA_CONST\t__objc_classlist",
+     "0x1000052D0\t0x00000020\t__DATA_CONST\t__objc_protolist",
+     "0x1000052F0\t0x00000008\t__DATA_CONST\t__objc_imageinfo",
+     "0x100006000\t0x000000A8\t__DATA\t__la_symbol_ptr",
+     "0x1000060A8\t0x00001890\t__DATA\t__objc_const",
+     "0x100007938\t0x00000138\t__DATA\t__objc_selrefs",
+     "0x100007A70\t0x00000070\t__DATA\t__objc_classrefs",
+     "0x100007AE0\t0x00000010\t__DATA\t__objc_superrefs",
+     "0x100007AF0\t0x00000048\t__DATA\t__objc_ivar",
+     "0x100007B38\t0x00000190\t__DATA\t__objc_data",
+     "0x100007CC8\t0x00000188\t__DATA\t__data",
+     "0x100007E50\t0x00000010\t__DATA\t__bss",
+     "# Symbols:",
+     "# Address\tSize    \tFile  Name",
+     "0x100001160\t0x00000040\t[  2] -[ViewController viewDidLoad]",
+     "0x1000011A0\t0x00000070\t[  2] -[ViewController setupContext:]",
+     "0x100001210\t0x00000080\t[  2] -[ViewController update:]",
+     "0x100001290\t0x00000040\t[  2] -[ViewController delete:]",
+     "0x1000012D0\t0x00000080\t[  2] -[ViewController fetch:]",
+     "0x100001350\t0x00000040\t[  2] -[ViewController setUpContextBtn]",
+     "0x100001390\t0x00000040\t[  2] -[ViewController setSetUpContextBtn:]",
+     "0x1000013D0\t0x00000040\t[  2] -[ViewController updateBtn]",
+     "0x100001410\t0x00000040\t[  2] -[ViewController setUpdateBtn:]",
+     "0x100001450\t0x00000040\t[  2] -[ViewController deleteBtn]",
+     "0x100001490\t0x00000040\t[  2] -[ViewController setDeleteBtn:]",
+     "0x1000014D0\t0x00000040\t[  2] -[ViewController fetchBtn]",
+     "0x100001510\t0x00000040\t[  2] -[ViewController setFetchBtn:]"
+     ....
+     */
     
     BOOL reachFiles = NO;
     BOOL reachSymbols = NO;
@@ -130,18 +197,25 @@
                 reachSymbols = YES;
         } else {
             if(reachFiles == YES && reachSections == NO && reachSymbols == NO) {
+                /// 解析 Object files: 部分
                 NSRange range = [line rangeOfString:@"]"];
                 if(range.location != NSNotFound) {
                     SymbolModel *symbol = [SymbolModel new];
-                    symbol.file = [line substringFromIndex:range.location+1];
-                    NSString *key = [line substringToIndex:range.location+1];
+                    symbol.file = [line substringFromIndex:range.location+1]; /// 符号所属文件路径
+                    NSString *key = [line substringToIndex:range.location+1]; /// 文件的类型标识符，在link-map文件中以 [ 0]、[ 1]标识
                     symbolMap[key] = symbol;
                 }
             } else if (reachFiles == YES && reachSections == YES && reachSymbols == YES) {
+                /// 解析 Symbols: 部分
                 NSArray <NSString *>*symbolsArray = [line componentsSeparatedByString:@"\t"];
+                /// 使用制表符切割 "# Address\tSize    \tFile  Name"
+                /// 如 "0x100001160\t0x00000040\t[  2] -[ViewController viewDidLoad]",
+
+                
                 if(symbolsArray.count == 3) {
                     NSString *fileKeyAndName = symbolsArray[2];
-                    NSUInteger size = strtoul([symbolsArray[1] UTF8String], nil, 16);
+                    // 符号占用的内存大小
+                    NSUInteger size = strtoul([symbolsArray[1] UTF8String], nil, 16); /// strtoul将16进制字符串按10进制输出
                     
                     NSRange range = [fileKeyAndName rangeOfString:@"]"];
                     if(range.location != NSNotFound) {
@@ -173,6 +247,10 @@
 }
 
 - (void)buildResultWithSymbols:(NSArray *)symbols {
+    /**
+     '\r'是回车，前者使光标到行首，（carriage return）
+     '\n'是换行，后者使光标下移一格，（line feed）
+     */
     self.result = [@"文件大小\t文件名称\r\n\r\n" mutableCopy];
     NSUInteger totalSize = 0;
     
@@ -271,16 +349,27 @@
     } else {
         size = [NSString stringWithFormat:@"%.2fK", model.size / 1024.0];
     }
+    /// 拼接每个.o文件的带下和文件名称
     [_result appendFormat:@"%@\t%@\r\n",size, [[model.file componentsSeparatedByString:@"/"] lastObject]];
 }
 
 - (BOOL)checkContent:(NSString *)content {
+    
     NSRange objsFileTagRange = [content rangeOfString:@"# Object files:"];
+    
+//    NSLog(@"objsFileTagRange: %@", NSStringFromRange(objsFileTagRange));
+    
     if (objsFileTagRange.length == 0) {
         return NO;
     }
     NSString *subObjsFileSymbolStr = [content substringFromIndex:objsFileTagRange.location + objsFileTagRange.length];
+    
+//    NSLog(@"subObjsFileSymbolStr: %@", subObjsFileSymbolStr);
+
     NSRange symbolsRange = [subObjsFileSymbolStr rangeOfString:@"# Symbols:"];
+    
+//    NSLog(@"symbolsRange: %@", NSStringFromRange(objsFileTagRange));
+
     if ([content rangeOfString:@"# Path:"].length <= 0||objsFileTagRange.location == NSNotFound||symbolsRange.location == NSNotFound) {
         return NO;
     }
